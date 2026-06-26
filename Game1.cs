@@ -1,8 +1,15 @@
-﻿using System.Drawing;
+﻿using Gum.Forms;
+using Gum.Forms.Controls;
+using Gum;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Color = Microsoft.Xna.Framework.Color;
+using Gum.Wireframe;
+using Gum.GueDeriving;
+using System.Diagnostics;
+using SharpDX.Direct3D9;
+using System.Collections.Generic;
 
 namespace hardGame
 {
@@ -14,32 +21,53 @@ namespace hardGame
         private const int WIDTH = 800;
         private const int HEIGHT = 600;
 
+        private Panel shopPanel;
+        private bool shopDown;
+        private const int SHOP_PANEL_WIDTH = (int)(WIDTH * 0.4);
+        private List<AbstractUpgrade> Upgrades = [];
+
+        private bool firstShopOpened = false;
         public Game1()
         {
             _graphics = new GraphicsDeviceManager(this);
             Content.RootDirectory = "Content";
             IsMouseVisible = true;
+            AbstractUpgrade upgrade1 = new ClickUpgrade("Novice Player", 10, 1.0);
+            Upgrades.Add(upgrade1);
         }
 
         protected override void Initialize()
         {
             base.Initialize();
-            // TODO: Add your initialization logic here
-            //_graphics.PreferredBackBufferWidth = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
-            //_graphics.PreferredBackBufferHeight = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height;
             _graphics.PreferredBackBufferWidth = WIDTH;
             _graphics.PreferredBackBufferHeight = HEIGHT;
             _graphics.HardwareModeSwitch = false;
             _graphics.IsFullScreen = false;
             _graphics.ApplyChanges();
+
+            InitializeGum();
+            InitializeUI();
+        }
+
+
+        private void InitializeUI()
+        {
+            GumService.Default.Root.Children.Clear();
+            CreateShopPanel(Upgrades);
         }
 
         protected override void LoadContent()
         {
             _spriteBatch = new SpriteBatch(GraphicsDevice);
             Texture2D texture = Content.Load<Texture2D>("mainButton");
-            mainButton = new MainButton(texture, new Vector2(WIDTH/2 - texture.Width/2, HEIGHT/2 - texture.Height/2), 1, 1);
-            // TODO: use this.Content to load your game content here
+            mainButton = new MainButton(texture, new Vector2(WIDTH / 2 - texture.Width / 2, HEIGHT / 2 - texture.Height / 2), Upgrades);
+            
+            // TESTS
+            //mainButton.losses += 2000000000000;
+            //for (int i = 0; i < 100; i++)
+            //{
+            //    Upgrades[0].Upgrade();
+            //}
         }
 
         protected override void Update(GameTime gameTime)
@@ -48,7 +76,42 @@ namespace hardGame
                 Exit();
 
             mainButton.Update(gameTime);
+            GumService.Default.Update(gameTime);
             base.Update(gameTime);
+
+            // hide shop features for brand new players
+            if (mainButton.lifetimeLosses < 10) return;
+            
+
+
+            // Add toggling of the shop because what if i want to enjoy clicking the button forever
+            if (Keyboard.GetState().IsKeyDown(Keys.S))
+            {
+                shopDown = true;
+                firstShopOpened = true;
+            }
+            else if (Keyboard.GetState().IsKeyUp(Keys.S) && shopDown)
+            { 
+                shopPanel.IsVisible = !shopPanel.IsVisible;
+                Debug.WriteLine($"Shop panel visibility: {shopPanel.IsVisible}");
+                shopDown = false;
+            }
+
+            // Adjusting the position of the button based on if shop is open or not
+            if (shopPanel.IsVisible)
+            {
+                mainButton.position = new Vector2((float)(((WIDTH + SHOP_PANEL_WIDTH) / 2) - mainButton.texture.Width / 2), HEIGHT / 2 - mainButton.texture.Height / 2);
+            }
+            else
+            {
+                mainButton.position = new Vector2(WIDTH / 2 - mainButton.texture.Width / 2, HEIGHT / 2 - mainButton.texture.Height / 2);
+            }
+
+            foreach (AbstractUpgrade upgrade in Upgrades)
+            {
+                // handle passive plays here
+            }
+
         }
 
         protected override void Draw(GameTime gameTime)
@@ -69,8 +132,258 @@ namespace hardGame
                 Color.White
             );
 
+            if (mainButton.lifetimeLosses == 10 && !firstShopOpened)
+            {
+                _spriteBatch.DrawString(
+                    Content.Load<SpriteFont>("ComicSans"),
+                    $"Congrats! Press S to open Sixer. \nHire new help to gamble more!!",
+                    new Vector2(WIDTH / 4, HEIGHT * 0.25f),
+                    Color.White
+                );
+            }
+
             _spriteBatch.End();
+
+            GumService.Default.Draw();
             base.Draw(gameTime);
+        }
+
+        /// <summary>
+        /// Example init function from the docs
+        /// </summary>
+        protected void InitializeGum()
+        {
+            // Initialize the Gum service. The second parameter specifies
+            // the version of the default visuals to use. V3 is the latest
+            // version.
+            GumService.Default.Initialize(this, DefaultVisualsVersion.V3);
+
+            // Tell the Gum service which content manager to use. We will tell it to
+            // use the global content manager from our Core.
+            GumService.Default.ContentLoader.XnaContentManager = Content;
+
+            // Register keyboard input for UI control.
+            FrameworkElement.KeyboardsForUiControl.Add(GumService.Default.Keyboard);
+
+            // Register gamepad input for Ui control.
+            FrameworkElement.GamePadsForUiControl.AddRange(GumService.Default.Gamepads);
+
+            // Customize the tab reverse UI navigation to also trigger when the keyboard
+            // Up arrow key is pushed.
+            FrameworkElement.TabReverseKeyCombos.Add(
+               new KeyCombo() { PushedKey = (Gum.Forms.Input.Keys)Keys.Up });
+
+            // Customize the tab UI navigation to also trigger when the keyboard
+            // Down arrow key is pushed.
+            FrameworkElement.TabKeyCombos.Add(
+               new KeyCombo() { PushedKey = (Gum.Forms.Input.Keys)Keys.Down });
+
+            // The assets created for the UI were done so at 1/4th the size to keep the size of the
+            // texture atlas small.  So we will set the default canvas size to be 1/4th the size of
+            // the game's resolution then tell gum to zoom in by a factor of 4.
+            GumService.Default.CanvasWidth = WIDTH;
+            GumService.Default.CanvasHeight = HEIGHT;
+            GumService.Default.Renderer.Camera.Zoom = 1f;
+        }
+
+        /// <summary>
+        /// Creates a side panel that is rendered on the main game screen.
+        /// Was not able to get gradients to work despite following docs to a T.
+        /// </summary>
+        /// <param name="upgrades"></param>
+        private void CreateShopPanel(List<AbstractUpgrade> upgrades)
+        {
+            shopPanel = new Panel();
+            shopPanel.Anchor(Gum.Wireframe.Anchor.BottomLeft);
+            shopPanel.WidthUnits = Gum.DataTypes.DimensionUnitType.Absolute;
+            shopPanel.HeightUnits = Gum.DataTypes.DimensionUnitType.Absolute;
+            shopPanel.Width = (int)(WIDTH * 0.4);
+            shopPanel.Height = (int)(HEIGHT * 0.8);
+            shopPanel.IsVisible = false;
+            shopPanel.AddToRoot();
+
+            var background = new RectangleRuntime();
+            background.Dock(Dock.Fill);
+            background.FillColor = new Color(225, 173, 109);
+            //background.UseGradient = true;
+            background.IsFilled = true;
+            //background.Color2 = Color.Black;
+            background.StrokeWidth = 0;
+            shopPanel.AddChild(background);
+
+
+            var title = new TextRuntime();
+            title.Text = "Shop [S]";
+            title.FontSize = 16;
+            title.Dock(Dock.Top);
+            title.HorizontalAlignment = RenderingLibrary.Graphics.HorizontalAlignment.Center;
+            shopPanel.AddChild(title);
+
+            int startingY = 40;
+            int rowSpacing = 60; // 55px height + 5px margin
+
+            for (int i = 0; i < upgrades.Count; i++)
+            {
+                var row = CreateLobbyRowItem(upgrades[i]);
+                row.Y = startingY + (i * rowSpacing); // Stacks them vertically
+                shopPanel.AddChild(row);
+            }
+        }
+
+        /// <summary>
+        /// graphic design is not my passion
+        /// </summary>
+        /// <param name="upgrade"></param>
+        /// <returns></returns>
+        private Panel CreateLobbyRowItem(AbstractUpgrade upgrade)
+        {
+            // 1. Main Container Row Panel
+            var rowContainer = new Panel();
+            rowContainer.WidthUnits = Gum.DataTypes.DimensionUnitType.Absolute;
+            rowContainer.HeightUnits = Gum.DataTypes.DimensionUnitType.Absolute;
+            rowContainer.Width = 290;  // Leave a safe 15px margin on both sides of a 320px panel
+            rowContainer.Height = 55;
+
+            // Position it safely below the title
+            rowContainer.XUnits = Gum.Converters.GeneralUnitType.PixelsFromMiddle;
+            rowContainer.XOrigin = RenderingLibrary.Graphics.HorizontalAlignment.Center;
+            rowContainer.X = 0; // Centers it perfectly within the shop panel
+            rowContainer.Y = 40; // Pushes it down below the "Shop" title text
+
+            // Background shape
+            var rowBackground = new RectangleRuntime();
+            rowBackground.Dock(Dock.Fill);
+            rowBackground.IsFilled = true;
+            rowBackground.FillColor = Color.White;
+            rowBackground.StrokeColor = Color.Black;
+            rowBackground.StrokeWidth = 2;
+            rowContainer.AddChild(rowBackground);
+
+            // --- LEFT SIDE: Enlist Button ---
+            var enlistButton = new Button();
+            enlistButton.WidthUnits = Gum.DataTypes.DimensionUnitType.Absolute;
+            enlistButton.HeightUnits = Gum.DataTypes.DimensionUnitType.Absolute;
+            enlistButton.Width = 85;
+            enlistButton.Height = 28;
+
+            // Anchor to Left Center of the row
+            enlistButton.XUnits = Gum.Converters.GeneralUnitType.PixelsFromSmall;
+            enlistButton.YUnits = Gum.Converters.GeneralUnitType.PixelsFromMiddle;
+            enlistButton.YOrigin = RenderingLibrary.Graphics.VerticalAlignment.Center;
+            enlistButton.X = 12; // Margin from left edge
+            enlistButton.Y = 0;  // Centered vertically
+
+            enlistButton.Text = $"enlist ${(long)upgrade.Cost}";
+
+            var btnBorder = new RectangleRuntime();
+            btnBorder.Dock(Dock.Fill);
+            btnBorder.IsFilled = false;
+            btnBorder.StrokeColor = Color.Black;
+            btnBorder.StrokeWidth = 2;
+            enlistButton.AddChild(btnBorder);
+
+            rowContainer.AddChild(enlistButton);
+
+            // --- CENTER: Text Details Stack ---
+            var detailsStack = new Panel();
+            detailsStack.WidthUnits = Gum.DataTypes.DimensionUnitType.Absolute;
+            detailsStack.HeightUnits = Gum.DataTypes.DimensionUnitType.Absolute;
+            detailsStack.Width = 110;
+            detailsStack.Height = 36;
+
+            // Anchor to Middle Center of the row
+            detailsStack.XUnits = Gum.Converters.GeneralUnitType.PixelsFromMiddle;
+            detailsStack.YUnits = Gum.Converters.GeneralUnitType.PixelsFromMiddle;
+            detailsStack.XOrigin = RenderingLibrary.Graphics.HorizontalAlignment.Center;
+            detailsStack.YOrigin = RenderingLibrary.Graphics.VerticalAlignment.Center;
+            detailsStack.X = 0;
+            detailsStack.Y = 0;
+
+            var titleText = new TextRuntime();
+            titleText.Text = upgrade.Name;
+            //titleText.FontSize = 8;
+            titleText.FontScale = 0.75f;
+            titleText.Color = Color.Black;
+            titleText.HorizontalAlignment = RenderingLibrary.Graphics.HorizontalAlignment.Center;
+            //titleText.Dock(Dock.Top);
+            titleText.Anchor(Anchor.Top);
+            detailsStack.AddChild(titleText);
+
+            var subText = new TextRuntime();
+            subText.Text = $"{(int)upgrade.Level} playing";
+            //subText.FontSize = 6;
+            subText.FontScale = 0.6f;
+            subText.Color = Color.DarkGray;
+            subText.HorizontalAlignment = RenderingLibrary.Graphics.HorizontalAlignment.Center;
+            subText.Anchor(Anchor.Center);
+            detailsStack.AddChild(subText);
+
+            rowContainer.AddChild(detailsStack);
+
+            // --- RIGHT SIDE: Placeholder Image ---
+            var imagePlaceholder = new RectangleRuntime();
+            imagePlaceholder.WidthUnits = Gum.DataTypes.DimensionUnitType.Absolute;
+            imagePlaceholder.HeightUnits = Gum.DataTypes.DimensionUnitType.Absolute;
+            imagePlaceholder.Width = 45;
+            imagePlaceholder.Height = 26;
+
+            // Anchor to Right Center of the row
+            imagePlaceholder.XUnits = Gum.Converters.GeneralUnitType.PixelsFromLarge;
+            imagePlaceholder.YUnits = Gum.Converters.GeneralUnitType.PixelsFromMiddle;
+            imagePlaceholder.XOrigin = RenderingLibrary.Graphics.HorizontalAlignment.Right;
+            imagePlaceholder.YOrigin = RenderingLibrary.Graphics.VerticalAlignment.Center;
+            imagePlaceholder.X = -12; // Inward from right side
+            imagePlaceholder.Y = 0;   // Centered vertically
+            imagePlaceholder.IsFilled = true;
+            imagePlaceholder.FillColor = new Color(180, 120, 80);
+
+            enlistButton.Click += (sender, e) =>
+            {
+                if (mainButton.losses >= upgrade.Cost)
+                {
+                    mainButton.losses -= (int)upgrade.Cost;
+
+                    // Execute the interface logic
+                    upgrade.Upgrade();
+
+                    // Increment your global multiplier or handle business logic
+                    //mainButton.clickMultiplier += (int)upgrade.MultiplierPerLevel;
+
+                    // Update UI Elements text immediately on click
+                    enlistButton.Text = $"Buy: {(int)upgrade.Cost}";
+                    subText.Text = $"Level: {upgrade.Level}";
+
+                    Debug.WriteLine($"{upgrade.Name} upgraded to Level {upgrade.Level}. New cost: {upgrade.Cost}. Remaining losses: {mainButton.losses}");
+                }
+                else
+                {
+                    Debug.WriteLine("Not enough losses to upgrade.");
+                }
+            };
+
+            rowContainer.AddChild(imagePlaceholder);
+
+            return rowContainer;
+        }
+
+        //private void EnlistButton_Click(object sender, System.EventArgs e)
+        //{
+        //    if (mainButton.losses >= 10)
+        //    {
+        //        mainButton.losses -= 10;
+        //        Debug.WriteLine("Losses - 10 = " + mainButton.losses);
+        //        mainButton.lossMultiplier += 1;
+        //    }
+        //    else
+        //    {
+        //        //Debug.WriteLine("Not enough losses to enlist.");
+        //    }
+
+        //}
+
+        private void UpdateUpgradeCost()
+        {
+
         }
     }
 }

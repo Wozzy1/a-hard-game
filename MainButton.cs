@@ -14,22 +14,24 @@ namespace hardGame
     {
         public Texture2D texture;
         public Vector2 position;
-        public int lossMultiplier;
-        public int winMultiplier;
         public int time;
         public Random random;
-        public int losses = 0;
-        public int wins = 0;
+        public long lifetimeLosses = 0;
+        public long losses = 0;
+        public long lifetimeWins = 0;
+        public long wins = 0;
+        public readonly List<AbstractUpgrade> upgrades;
 
+        // default winning probability is 0.0000000000000000000000000001079797
+        private double WIN_RATE = 0.0000000000000000000000000001079797; // 1 in 9,264,100,000,000,000,000,000,000,000
 
         public MouseState previousMouseState;
-        public MainButton(Texture2D texture, Vector2 position, int lossMultiplier, int winMultiplier)
+        public MainButton(Texture2D texture, Vector2 position, List<AbstractUpgrade> upgrades)
         {
             this.texture = texture;
             this.position = position;
-            this.lossMultiplier = lossMultiplier;
-            this.winMultiplier = winMultiplier;
             this.random = new Random();
+            this.upgrades = upgrades;
         }
 
         public void Update(GameTime gameTime)
@@ -43,15 +45,8 @@ namespace hardGame
                 {
                     System.Diagnostics.Debug.WriteLine("Button clicked at " + time);
 
-                    // default winning probability is 0.0000000000000000000000000001079797
-                    if (random.Next() * random.Next() * random.Next() == 1)
-                    {
-                        wins += winMultiplier;
-                    }
-                    else
-                    {
-                        losses += lossMultiplier;
-                    }
+                    SimulatePlays(((ClickUpgrade)upgrades[0]).clickMultiplier, WIN_RATE);
+
                 }
             }
             time++;
@@ -61,6 +56,32 @@ namespace hardGame
         public void Draw(SpriteBatch spriteBatch)
         {
             spriteBatch.Draw(texture, position, Color.White);
+        }
+
+        /// <summary>
+        /// Using central limit theorem to simulate wins and losses. 
+        /// Didn't think high school stats would be useful lol
+        /// </summary>
+        /// <param name="totalPlays"></param>
+        /// <param name="wr"></param>
+        private void SimulatePlays(double totalPlays, double wr)
+        {
+            double mean = totalPlays * wr;
+            double stdDev = Math.Sqrt(totalPlays * wr * (1 - wr));
+
+            double u1 = 1.0 - random.NextDouble();
+            double u2 = 1.0 - random.NextDouble();
+            double randStdNormal = Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Sin(2.0 * Math.PI * u2);
+
+            double simulatedWins = mean + stdDev * randStdNormal;
+
+            long finalWins = (long)Math.Max(0, Math.Min(totalPlays, Math.Round(simulatedWins)));
+            long finalLosses = (long)(totalPlays - finalWins);
+
+            wins += finalWins;
+            lifetimeWins += finalWins;
+            losses += finalLosses;
+            lifetimeLosses += finalLosses;
         }
     }
 }
