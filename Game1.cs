@@ -10,6 +10,7 @@ using Gum.GueDeriving;
 using System.Diagnostics;
 using SharpDX.Direct3D9;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace hardGame
 {
@@ -22,18 +23,17 @@ namespace hardGame
         private const int HEIGHT = 600;
 
         private Panel shopPanel;
-        private bool shopDown;
+        private bool sKeyDown;
         private const int SHOP_PANEL_WIDTH = (int)(WIDTH * 0.4);
-        private List<AbstractUpgrade> Upgrades = [];
+        private UpgradeManager um;
 
         private bool firstShopOpened = false;
         public Game1()
         {
             _graphics = new GraphicsDeviceManager(this);
+            um = new UpgradeManager(this);
             Content.RootDirectory = "Content";
             IsMouseVisible = true;
-            AbstractUpgrade upgrade1 = new ClickUpgrade("Novice Player", 10, 1.0);
-            Upgrades.Add(upgrade1);
         }
 
         protected override void Initialize()
@@ -47,20 +47,38 @@ namespace hardGame
 
             InitializeGum();
             InitializeUI();
+            um.InitializeUpgrades();
+            //InitializeUpgrades();
         }
 
 
         private void InitializeUI()
         {
             GumService.Default.Root.Children.Clear();
-            CreateShopPanel(Upgrades);
+            CreateShopPanel();
+        }
+
+        private void InitializeUpgrades()
+        {
+            um.AddClickUpgrade( new ClickUpgrade(
+                name: "Novice Player",
+                baseCost: 10,
+                multiplierPerLevel: 1.0
+            ));
+            //PassiveUpgrade pup1 = new PassiveUpgrade({Name = "Obessed Player", 50, 1.0, 10.0 });
+            um.AddPassiveUpgrade( new PassiveUpgrade(
+                name: "Obessed Player",
+                baseCost: 50,
+                multiplierPerLevel: 1.0,
+                secondsPerClick: 10.0
+            ));
         }
 
         protected override void LoadContent()
         {
             _spriteBatch = new SpriteBatch(GraphicsDevice);
             Texture2D texture = Content.Load<Texture2D>("mainButton");
-            mainButton = new MainButton(texture, new Vector2(WIDTH / 2 - texture.Width / 2, HEIGHT / 2 - texture.Height / 2), Upgrades);
+            mainButton = new MainButton(texture, new Vector2(WIDTH / 2 - texture.Width / 2, HEIGHT / 2 - texture.Height / 2), um);
             
             // TESTS
             //mainButton.losses += 2000000000000;
@@ -81,35 +99,34 @@ namespace hardGame
 
             // hide shop features for brand new players
             if (mainButton.lifetimeLosses < 10) return;
-            
+            if (mainButton.lifetimeLosses >= 50)
+            {
+                um.AddPassiveUpgrade((PassiveUpgrade)um.AllUpgrades[1]);
+            }
 
 
             // Add toggling of the shop because what if i want to enjoy clicking the button forever
             if (Keyboard.GetState().IsKeyDown(Keys.S))
             {
-                shopDown = true;
+                sKeyDown = true;
                 firstShopOpened = true;
             }
-            else if (Keyboard.GetState().IsKeyUp(Keys.S) && shopDown)
+            else if (Keyboard.GetState().IsKeyUp(Keys.S) && sKeyDown)
             { 
                 shopPanel.IsVisible = !shopPanel.IsVisible;
                 Debug.WriteLine($"Shop panel visibility: {shopPanel.IsVisible}");
-                shopDown = false;
+                Debug.WriteLine("Count of unlocked upgrades" + um.UnlockedUpgrades.Count);
+                sKeyDown = false;
             }
 
             // Adjusting the position of the button based on if shop is open or not
             if (shopPanel.IsVisible)
             {
-                mainButton.position = new Vector2((float)(((WIDTH + SHOP_PANEL_WIDTH) / 2) - mainButton.texture.Width / 2), HEIGHT / 2 - mainButton.texture.Height / 2);
+                mainButton.position = new Vector2((((WIDTH + SHOP_PANEL_WIDTH) / 2) - mainButton.texture.Width / 2), HEIGHT / 2 - mainButton.texture.Height / 2);
             }
             else
             {
                 mainButton.position = new Vector2(WIDTH / 2 - mainButton.texture.Width / 2, HEIGHT / 2 - mainButton.texture.Height / 2);
-            }
-
-            foreach (AbstractUpgrade upgrade in Upgrades)
-            {
-                // handle passive plays here
             }
 
         }
@@ -191,7 +208,7 @@ namespace hardGame
         /// Was not able to get gradients to work despite following docs to a T.
         /// </summary>
         /// <param name="upgrades"></param>
-        private void CreateShopPanel(List<AbstractUpgrade> upgrades)
+        private void CreateShopPanel()
         {
             shopPanel = new Panel();
             shopPanel.Anchor(Gum.Wireframe.Anchor.BottomLeft);
@@ -222,11 +239,14 @@ namespace hardGame
             int startingY = 40;
             int rowSpacing = 60; // 55px height + 5px margin
 
-            for (int i = 0; i < upgrades.Count; i++)
+            for (int i = 0; i < um.AllUpgrades.Count; i++)
             {
-                var row = CreateLobbyRowItem(upgrades[i]);
-                row.Y = startingY + (i * rowSpacing); // Stacks them vertically
-                shopPanel.AddChild(row);
+                var row = CreateLobbyRowItem(um.AllUpgrades[i]);
+                if (um.UnlockedUpgrades.Contains(um.AllUpgrades[i]))
+                {
+                    row.Y = startingY + (i * rowSpacing); // Stacks them vertically
+                    shopPanel.AddChild(row);
+                }
             }
         }
 
@@ -366,24 +386,5 @@ namespace hardGame
             return rowContainer;
         }
 
-        //private void EnlistButton_Click(object sender, System.EventArgs e)
-        //{
-        //    if (mainButton.losses >= 10)
-        //    {
-        //        mainButton.losses -= 10;
-        //        Debug.WriteLine("Losses - 10 = " + mainButton.losses);
-        //        mainButton.lossMultiplier += 1;
-        //    }
-        //    else
-        //    {
-        //        //Debug.WriteLine("Not enough losses to enlist.");
-        //    }
-
-        //}
-
-        private void UpdateUpgradeCost()
-        {
-
-        }
     }
 }

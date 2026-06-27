@@ -8,10 +8,10 @@ namespace hardGame
 {
     internal class ClickUpgrade : AbstractUpgrade
     {
-        public double clickMultiplier { get; set; }
+        public double ClickMultiplier { get; set; }
         public ClickUpgrade(string name, long baseCost, double multiplierPerLevel) : base(name, baseCost, multiplierPerLevel)
         {
-            clickMultiplier = 1;
+            ClickMultiplier = 1;
         }
 
         public override void Upgrade()
@@ -19,7 +19,7 @@ namespace hardGame
             Cost = (long)Math.Floor(BASE_COST * Math.Pow(1.25, Level)) + 1;
             //System.Diagnostics.Debug.WriteLine($"Upgraded {Name} to level {Level + 1}. New cost: {Cost}");
             Level++;
-            this.clickMultiplier += (int)MultiplierPerLevel;
+            this.ClickMultiplier += (int)MultiplierPerLevel;
         }
     }
 }
