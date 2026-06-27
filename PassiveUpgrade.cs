@@ -17,7 +17,8 @@ namespace hardGame
 
         public override void Upgrade()
         {
-            Cost = (long)Math.Floor(BASE_COST * Math.Pow(1.25, Level)) + 1;
+            Cost = (long)Math.Floor(BASE_COST * Math.Pow(1.25, Level+1));
+            Level++;
         }
         /// <summary>
         /// Tracks time since last passive click. For reach PassiveUpgrade, this dictacts if a click should happen in this Update.

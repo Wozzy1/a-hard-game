@@ -31,7 +31,7 @@ namespace hardGame
                 name: "Obessed Player",
                 baseCost: 50,
                 multiplierPerLevel: 1.0,
-                secondsPerClick: 10.0
+                secondsPerClick: 1.0
             ));
 
             this.UnlockedUpgrades.Add(this.AllUpgrades[0]);

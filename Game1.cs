@@ -22,16 +22,19 @@ namespace hardGame
         private const int WIDTH = 800;
         private const int HEIGHT = 600;
 
-        private Panel shopPanel;
+        //private Panel shopPanel;
+        private ScrollViewer shopScrollViewer;
         private bool sKeyDown;
         private const int SHOP_PANEL_WIDTH = (int)(WIDTH * 0.4);
         private UpgradeManager um;
+        private AchievementManager pm;
 
         private bool firstShopOpened = false;
         public Game1()
         {
             _graphics = new GraphicsDeviceManager(this);
             um = new UpgradeManager(this);
+            pm = new AchievementManager(this);
             Content.RootDirectory = "Content";
             IsMouseVisible = true;
         }
@@ -95,14 +98,29 @@ namespace hardGame
 
             mainButton.Update(gameTime);
             GumService.Default.Update(gameTime);
+            pm.Update(gameTime);
             base.Update(gameTime);
 
             // hide shop features for brand new players
             if (mainButton.lifetimeLosses < 10) return;
-            if (mainButton.lifetimeLosses >= 50)
+            //if (pm.CheckLossMilestone(10)) return;
+
+            // when player reaches 50 losses, make the second upgrade available in the shop
+            foreach (var milestone in pm.CheckLifetimeLosses(mainButton.lifetimeLosses))
             {
-                um.AddPassiveUpgrade((PassiveUpgrade)um.AllUpgrades[1]);
+                if (milestone.Key == "50 Losses")
+                {
+                    um.AddPassiveUpgrade((PassiveUpgrade)um.AllUpgrades[1]);
+                    Debug.WriteLine("Unlocked Passive Upgrade: Obessed Player");
+                    RefreshShopRows();
+                }
             }
+            
+            //if (mainButton.lifetimeLosses < 10) return;
+            //if (mainButton.lifetimeLosses >= 50 && mainButton.losses > 50)
+            //{
+            //    um.AddPassiveUpgrade((PassiveUpgrade)um.AllUpgrades[1]);
+            //}
 
 
             // Add toggling of the shop because what if i want to enjoy clicking the button forever
@@ -110,17 +128,18 @@ namespace hardGame
             {
                 sKeyDown = true;
                 firstShopOpened = true;
+                RefreshShopRows();
             }
             else if (Keyboard.GetState().IsKeyUp(Keys.S) && sKeyDown)
             { 
-                shopPanel.IsVisible = !shopPanel.IsVisible;
-                Debug.WriteLine($"Shop panel visibility: {shopPanel.IsVisible}");
+                shopScrollViewer.IsVisible = !shopScrollViewer.IsVisible;
+                Debug.WriteLine($"Shop panel visibility: {shopScrollViewer.IsVisible}");
                 Debug.WriteLine("Count of unlocked upgrades" + um.UnlockedUpgrades.Count);
                 sKeyDown = false;
             }
 
             // Adjusting the position of the button based on if shop is open or not
-            if (shopPanel.IsVisible)
+            if (shopScrollViewer.IsVisible)
             {
                 mainButton.position = new Vector2((((WIDTH + SHOP_PANEL_WIDTH) / 2) - mainButton.texture.Width / 2), HEIGHT / 2 - mainButton.texture.Height / 2);
             }
@@ -210,14 +229,17 @@ namespace hardGame
         /// <param name="upgrades"></param>
         private void CreateShopPanel()
         {
-            shopPanel = new Panel();
-            shopPanel.Anchor(Gum.Wireframe.Anchor.BottomLeft);
-            shopPanel.WidthUnits = Gum.DataTypes.DimensionUnitType.Absolute;
-            shopPanel.HeightUnits = Gum.DataTypes.DimensionUnitType.Absolute;
-            shopPanel.Width = (int)(WIDTH * 0.4);
-            shopPanel.Height = (int)(HEIGHT * 0.8);
-            shopPanel.IsVisible = false;
-            shopPanel.AddToRoot();
+            shopScrollViewer = new ScrollViewer();
+            shopScrollViewer.Anchor(Gum.Wireframe.Anchor.BottomLeft);
+            shopScrollViewer.WidthUnits = Gum.DataTypes.DimensionUnitType.Absolute;
+            shopScrollViewer.HeightUnits = Gum.DataTypes.DimensionUnitType.Absolute;
+            shopScrollViewer.Width = (int)(WIDTH * 0.4);
+            shopScrollViewer.Height = (int)(HEIGHT * 0.8);
+            shopScrollViewer.IsVisible = false;
+            shopScrollViewer.AddToRoot();
+
+            shopScrollViewer.InnerPanel.StackSpacing = 5; // 5px gap between your rows
+            shopScrollViewer.MouseWheelScrollSpeed = 40;   // Adjust scroll sensitivity
 
             var background = new RectangleRuntime();
             background.Dock(Dock.Fill);
@@ -226,7 +248,7 @@ namespace hardGame
             background.IsFilled = true;
             //background.Color2 = Color.Black;
             background.StrokeWidth = 0;
-            shopPanel.AddChild(background);
+            shopScrollViewer.AddChild(background);
 
 
             var title = new TextRuntime();
@@ -234,18 +256,38 @@ namespace hardGame
             title.FontSize = 16;
             title.Dock(Dock.Top);
             title.HorizontalAlignment = RenderingLibrary.Graphics.HorizontalAlignment.Center;
-            shopPanel.AddChild(title);
+            shopScrollViewer.AddChild(title);
 
-            int startingY = 40;
-            int rowSpacing = 60; // 55px height + 5px margin
+            //int startingY = 40;
+            //int rowSpacing = 60; // 55px height + 5px margin
 
-            for (int i = 0; i < um.AllUpgrades.Count; i++)
+            //for (int i = 0; i < um.AllUpgrades.Count; i++)
+            //{
+            //    var row = CreateLobbyRowItem(um.AllUpgrades[i]);
+            //    if (um.UnlockedUpgrades.Contains(um.AllUpgrades[i]))
+            //    {
+            //        row.Y = startingY + (i * rowSpacing); // Stacks them vertically
+            //        shopScrollViewer.AddChild(row);
+            //    }
+            //}
+            RefreshShopRows();
+        }
+        public void RefreshShopRows()
+        {
+            // Clear out only the upgrade rows from the scroll viewer's InnerPanel
+            // (If title/background are children of the main scrollViewer, they won't be deleted here)
+            shopScrollViewer.InnerPanel.Children.Clear();
+
+            foreach (var upgrade in um.AllUpgrades)
             {
-                var row = CreateLobbyRowItem(um.AllUpgrades[i]);
-                if (um.UnlockedUpgrades.Contains(um.AllUpgrades[i]))
+                // Only generate and add rows for upgrades the player has unlocked
+                if (um.UnlockedUpgrades.Contains(upgrade))
                 {
-                    row.Y = startingY + (i * rowSpacing); // Stacks them vertically
-                    shopPanel.AddChild(row);
+                    var row = CreateLobbyRowItem(upgrade);
+
+                    // Notice: No manual Y coordinate positioning is needed!
+                    // Gum's ScrollViewer stacks everything automatically.
+                    shopScrollViewer.AddChild(row);
                 }
             }
         }
@@ -268,7 +310,7 @@ namespace hardGame
             rowContainer.XUnits = Gum.Converters.GeneralUnitType.PixelsFromMiddle;
             rowContainer.XOrigin = RenderingLibrary.Graphics.HorizontalAlignment.Center;
             rowContainer.X = 0; // Centers it perfectly within the shop panel
-            rowContainer.Y = 40; // Pushes it down below the "Shop" title text
+            //rowContainer.Y = 40; // Pushes it down below the "Shop" title text
 
             // Background shape
             var rowBackground = new RectangleRuntime();
@@ -293,7 +335,7 @@ namespace hardGame
             enlistButton.X = 12; // Margin from left edge
             enlistButton.Y = 0;  // Centered vertically
 
-            enlistButton.Text = $"enlist ${(long)upgrade.Cost}";
+            enlistButton.Text = $"Hire ${(long)upgrade.Cost}";
 
             var btnBorder = new RectangleRuntime();
             btnBorder.Dock(Dock.Fill);
@@ -370,7 +412,7 @@ namespace hardGame
                     //mainButton.clickMultiplier += (int)upgrade.MultiplierPerLevel;
 
                     // Update UI Elements text immediately on click
-                    enlistButton.Text = $"Buy: {(int)upgrade.Cost}";
+                    enlistButton.Text = $"Hire: ${(int)upgrade.Cost}";
                     subText.Text = $"Level: {upgrade.Level}";
 
                     Debug.WriteLine($"{upgrade.Name} upgraded to Level {upgrade.Level}. New cost: {upgrade.Cost}. Remaining losses: {mainButton.losses}");
