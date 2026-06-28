@@ -12,8 +12,6 @@ namespace hardGame
         private Game game { get; init; } = game;
         public List<AbstractUpgrade> AllUpgrades = new List<AbstractUpgrade>();
         public List<AbstractUpgrade> UnlockedUpgrades = new List<AbstractUpgrade>();
-        //public List<ClickUpgrade> ClickUpgrades = [];
-        //public List<PassiveUpgrade> PassiveUpgrades = [];
 
         /// <summary>
         /// Initializes the list of all available upgrades in the game.

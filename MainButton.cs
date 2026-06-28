@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -20,7 +21,10 @@ namespace hardGame
         public long losses = 0;
         public long lifetimeWins = 0;
         public long wins = 0;
-        //public readonly List<AbstractUpgrade> upgrades = upgrades;
+
+        public long LossesOverLastSecond { get; private set; } = 0;
+        private long previousLifetimeLosses = 0;
+        private double accumulatedTime = 0;
 
         // default winning probability is 0.0000000000000000000000000001079797
         private double WIN_RATE = 0.0000000000000000000000000001079797; // 1 in 9,264,100,000,000,000,000,000,000,000
@@ -36,12 +40,11 @@ namespace hardGame
                 Rectangle buttonRectangle = new Rectangle((int)position.X, (int)position.Y, texture.Width, texture.Height);
                 if (buttonRectangle.Contains(mouseState.Position))
                 {
-                    System.Diagnostics.Debug.WriteLine("Button clicked at " + time);
+                    Debug.WriteLine("Button clicked at " + time);
                     if (um.UnlockedUpgrades.OfType<ClickUpgrade>().Any())
                     {
                         ClickUpgrade cup1 = um.UnlockedUpgrades.OfType<ClickUpgrade>().First();
                         SimulatePlays(cup1.ClickMultiplier, WIN_RATE);
-                        //System.Diagnostics.Debug.WriteLine(cup1.ClickMultiplier);
                     }
 
                 }
@@ -54,10 +57,20 @@ namespace hardGame
                 bool clickOccurs = pup.Update(gameTime.ElapsedGameTime.TotalMilliseconds);
                 if (clickOccurs)
                 {
-                    System.Diagnostics.Debug.WriteLine("Passive clicked at " + time);
+                    Debug.WriteLine("Passive clicked at " + time);
                     SimulatePlays(pup.Level, WIN_RATE);
                 }
                 
+            }
+            
+            // Every second, compare the delta of lifetimeLosses to calc losses in the last sec
+            accumulatedTime += gameTime.ElapsedGameTime.TotalMilliseconds;
+            if (accumulatedTime >= 1000)
+            {
+                accumulatedTime = 0;
+                LossesOverLastSecond = lifetimeLosses - previousLifetimeLosses;
+                Debug.WriteLine($"Losses over last second: {LossesOverLastSecond}");
+                previousLifetimeLosses = lifetimeLosses;
             }
         }
 

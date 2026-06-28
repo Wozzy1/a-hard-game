@@ -30,6 +30,9 @@ namespace hardGame
         private AchievementManager pm;
 
         private bool firstShopOpened = false;
+
+        private MouseState _previousMouseState;
+        private bool _showLifetimeStats = false;
         public Game1()
         {
             _graphics = new GraphicsDeviceManager(this);
@@ -51,30 +54,12 @@ namespace hardGame
             InitializeGum();
             InitializeUI();
             um.InitializeUpgrades();
-            //InitializeUpgrades();
         }
-
 
         private void InitializeUI()
         {
             GumService.Default.Root.Children.Clear();
             CreateShopPanel();
-        }
-
-        private void InitializeUpgrades()
-        {
-            um.AddClickUpgrade( new ClickUpgrade(
-                name: "Novice Player",
-                baseCost: 10,
-                multiplierPerLevel: 1.0
-            ));
-            //PassiveUpgrade pup1 = new PassiveUpgrade({Name = "Obessed Player", 50, 1.0, 10.0 });
-            um.AddPassiveUpgrade( new PassiveUpgrade(
-                name: "Obessed Player",
-                baseCost: 50,
-                multiplierPerLevel: 1.0,
-                secondsPerClick: 10.0
-            ));
         }
 
         protected override void LoadContent()
@@ -101,9 +86,10 @@ namespace hardGame
             pm.Update(gameTime);
             base.Update(gameTime);
 
+;           CheckLifetimeStatsToggle();
+
             // hide shop features for brand new players
             if (mainButton.lifetimeLosses < 10) return;
-            //if (pm.CheckLossMilestone(10)) return;
 
             // when player reaches 50 losses, make the second upgrade available in the shop
             foreach (var milestone in pm.CheckLifetimeLosses(mainButton.lifetimeLosses))
@@ -115,13 +101,6 @@ namespace hardGame
                     RefreshShopRows();
                 }
             }
-            
-            //if (mainButton.lifetimeLosses < 10) return;
-            //if (mainButton.lifetimeLosses >= 50 && mainButton.losses > 50)
-            //{
-            //    um.AddPassiveUpgrade((PassiveUpgrade)um.AllUpgrades[1]);
-            //}
-
 
             // Add toggling of the shop because what if i want to enjoy clicking the button forever
             if (Keyboard.GetState().IsKeyDown(Keys.S))
@@ -153,8 +132,10 @@ namespace hardGame
         protected override void Draw(GameTime gameTime)
         {
             GraphicsDevice.Clear(Color.CornflowerBlue);
+            SpriteFont font = Content.Load<SpriteFont>("ComicSans");
+            string winLossText = $"Losses: {mainButton.losses} Wins: {mainButton.wins}";
+            Vector2 winLossVector = new Vector2(10, 10);
             _spriteBatch.Begin();
-
             _spriteBatch.Draw(
                 mainButton.texture,
                 mainButton.position,
@@ -162,11 +143,29 @@ namespace hardGame
             );
 
             _spriteBatch.DrawString(
-                Content.Load<SpriteFont>("ComicSans"),
-                $"Losses: {mainButton.losses} Wins: {mainButton.wins}",
-                new Vector2(10, 10),
+                font,
+                winLossText,
+                winLossVector,
                 Color.White
             );
+            Vector2 textSize = font.MeasureString(winLossText);
+            Rectangle textBounds = new Rectangle(
+                (int)winLossVector.X,
+                (int)winLossVector.Y,
+                (int)textSize.X,
+                (int)textSize.Y
+            );
+
+            Point mousePos = Mouse.GetState().Position;
+            if (_showLifetimeStats)
+            {
+                _spriteBatch.DrawString(
+                    font,
+                    $"Lifetime Losses: {mainButton.lifetimeLosses} Lifetime Wins: {mainButton.lifetimeWins}",
+                    new Vector2(10, 35),
+                    Color.White
+                );
+            }
 
             if (mainButton.lifetimeLosses == 10 && !firstShopOpened)
             {
@@ -182,6 +181,33 @@ namespace hardGame
 
             GumService.Default.Draw();
             base.Draw(gameTime);
+        }
+
+        private void CheckLifetimeStatsToggle()
+        {
+            MouseState currentMouseState = Mouse.GetState();
+            SpriteFont font = Content.Load<SpriteFont>("ComicSans");
+            string regularText = $"Losses: {mainButton.losses} Wins: {mainButton.wins}";
+            Vector2 textPosition = new Vector2(10, 10);
+            Vector2 textSize = font.MeasureString(regularText);
+
+            Rectangle textBounds = new Rectangle(
+                (int)textPosition.X,
+                (int)textPosition.Y,
+                (int)textSize.X,
+                (int)textSize.Y
+            );
+
+            if (textBounds.Contains(currentMouseState.Position))
+            {
+                if (currentMouseState.LeftButton == ButtonState.Pressed &&
+                    _previousMouseState.LeftButton == ButtonState.Released)
+                {
+                    _showLifetimeStats = !_showLifetimeStats;
+                }
+            }
+
+            _previousMouseState = currentMouseState;
         }
 
         /// <summary>
@@ -258,35 +284,18 @@ namespace hardGame
             title.HorizontalAlignment = RenderingLibrary.Graphics.HorizontalAlignment.Center;
             shopScrollViewer.AddChild(title);
 
-            //int startingY = 40;
-            //int rowSpacing = 60; // 55px height + 5px margin
-
-            //for (int i = 0; i < um.AllUpgrades.Count; i++)
-            //{
-            //    var row = CreateLobbyRowItem(um.AllUpgrades[i]);
-            //    if (um.UnlockedUpgrades.Contains(um.AllUpgrades[i]))
-            //    {
-            //        row.Y = startingY + (i * rowSpacing); // Stacks them vertically
-            //        shopScrollViewer.AddChild(row);
-            //    }
-            //}
             RefreshShopRows();
         }
-        public void RefreshShopRows()
+        private void RefreshShopRows()
         {
-            // Clear out only the upgrade rows from the scroll viewer's InnerPanel
-            // (If title/background are children of the main scrollViewer, they won't be deleted here)
+            // clear the existing rows
             shopScrollViewer.InnerPanel.Children.Clear();
 
             foreach (var upgrade in um.AllUpgrades)
             {
-                // Only generate and add rows for upgrades the player has unlocked
                 if (um.UnlockedUpgrades.Contains(upgrade))
                 {
                     var row = CreateLobbyRowItem(upgrade);
-
-                    // Notice: No manual Y coordinate positioning is needed!
-                    // Gum's ScrollViewer stacks everything automatically.
                     shopScrollViewer.AddChild(row);
                 }
             }
@@ -403,7 +412,7 @@ namespace hardGame
             {
                 if (mainButton.losses >= upgrade.Cost)
                 {
-                    mainButton.losses -= (int)upgrade.Cost;
+                    mainButton.losses -= upgrade.Cost;
 
                     // Execute the interface logic
                     upgrade.Upgrade();
@@ -412,7 +421,7 @@ namespace hardGame
                     //mainButton.clickMultiplier += (int)upgrade.MultiplierPerLevel;
 
                     // Update UI Elements text immediately on click
-                    enlistButton.Text = $"Hire: ${(int)upgrade.Cost}";
+                    enlistButton.Text = $"Hire: ${upgrade.Cost}";
                     subText.Text = $"Level: {upgrade.Level}";
 
                     Debug.WriteLine($"{upgrade.Name} upgraded to Level {upgrade.Level}. New cost: {upgrade.Cost}. Remaining losses: {mainButton.losses}");

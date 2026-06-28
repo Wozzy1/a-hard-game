@@ -45,7 +45,6 @@ namespace hardGame
                 // If they meet the threshold and haven't unlocked it yet
                 if (lifetimeLosses >= milestone.Value && Milestones.Add(milestone.Key))
                 {
-                    // Fix the bug: keep your double-based HashSet synced too!
                     LossMilestones.Add(milestone.Value);
 
                     newlyUnlocked.Add(milestone);
